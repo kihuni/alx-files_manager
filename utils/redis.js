@@ -1,41 +1,63 @@
-const redis = require('redis');
-const { promisify } = require('util'); // THIS IS FOR CONVERTING CLIENT METHODS INTO PROMISES
+import { promisify } from 'util';
+import { createClient } from 'redis';
 
+/**
+ * Represents a Redis client.
+ */
 class RedisClient {
+  /**
+   * Creates a new RedisClient instance.
+   */
   constructor() {
-    this.client = redis.createClient();
-
+    this.client = createClient();
+    this.isClientConnected = true;
     this.client.on('error', (err) => {
-      console.error(`Error: ${err}`);
+      console.error('Redis client failed to connect:', err.message || err.toString());
+      this.isClientConnected = false;
+    });
+    this.client.on('connect', () => {
+      this.isClientConnected = true;
     });
   }
 
-  // This functions pings Redis to check if the connection is alive
-  async isAlive() {
-    return promisify(this.client.ping).bind(this.client)() === 'PONG';
+  /**
+   * Checks if this client's connection to the Redis server is active.
+   * @returns {boolean}
+   */
+  isAlive() {
+    return this.isClientConnected;
   }
 
-  // This function uses getAsync retrieve the value for a given key
-
+  /**
+   * Retrieves the value of a given key.
+   * @param {String} key The key of the item to retrieve.
+   * @returns {String | Object}
+   */
   async get(key) {
-    const getAsync = promisify(this.client.get).bind(this.client);
-    return getAsync(key);
+    return promisify(this.client.GET).bind(this.client)(key);
   }
 
-  // This function uses the setAsync method to store a value
-  // with an expiration time set by the duration argument
-
+  /**
+   * Stores a key and its value along with an expiration time.
+   * @param {String} key The key of the item to store.
+   * @param {String | Number | Boolean} value The item to store.
+   * @param {Number} duration The expiration time of the item in seconds.
+   * @returns {Promise<void>}
+   */
   async set(key, value, duration) {
-    const setAsync = promisify(this.client.set).bind(this.client);
-    return setAsync(key, value, 'EX', duration);
+    await promisify(this.client.SETEX)
+      .bind(this.client)(key, duration, value);
   }
 
-  // This function uses the delAsync method to remove a value for a given key
-
+  /**
+   * Removes the value of a given key.
+   * @param {String} key The key of the item to remove.
+   * @returns {Promise<void>}
+   */
   async del(key) {
-    const delAsync = promisify(this.client.del).bind(this.client);
-    return delAsync(key);
+    await promisify(this.client.DEL).bind(this.client)(key);
   }
 }
 
-module.exports = RedisClient;
+export const redisClient = new RedisClient();
+export default redisClient;
